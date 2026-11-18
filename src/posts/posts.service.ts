@@ -1,27 +1,35 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { CreatePostDto } from './dto/create-post.dto.js';
 import { UpdatePostDto } from './dto/update-post.dto.js';
+import { AddCommentDto } from './dto/add-comment.dto.js';
 import { ListQueryDto } from '../common/dto/list-query.dto.js';
-import { InjectModel } from '@nestjs/mongoose';
 import { Post } from './schemas/post.schema.js';
-import { Model } from 'mongoose';
+import { JwtPayload } from '../auth/auth.service.js';
+import { UserRole } from '../user/dto/create-user.dto.js';
+
+const AUTHOR_FIELDS = 'name email';   // ALWAYS limit populated fields
 
 @Injectable()
 export class PostsService {
-    constructor(@InjectModel(Post.name) private readonly postModel: Model<Post>) { }
-  
-  create(createPostDto: CreatePostDto) {
-    return 'This action adds a new post';
+  constructor(@InjectModel(Post.name) private readonly postModel: Model<Post>) { }
+
+  async create(dto: CreatePostDto, user: JwtPayload) {
+    const post = await this.postModel.create({ ...dto, author: new Types.ObjectId(user.userId) });
+    return post.populate('author', AUTHOR_FIELDS);
   }
 
-  // posts.service.ts
   async findAll({ page, limit, search, sort }: ListQueryDto) {
-    const filter = search ? { title: { $regex: search, $options: 'i' } } : {};
+    // Escape regex special chars so user input can't build a slow/odd regex
+    const filter = search
+      ? { title: new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+      : {};
 
     const [data, total] = await Promise.all([
       this.postModel
         .find(filter)
-        .populate('author', 'name email')
+        .populate('author', AUTHOR_FIELDS)
         .sort({ [sort]: sort === 'title' ? 1 : -1 })
         .skip((page - 1) * limit)
         .limit(limit),
@@ -31,25 +39,43 @@ export class PostsService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-
-  findOne(id: number) {
-    return `This action returns a #${id} post`;
+  async findOne(id: Types.ObjectId) {
+    const post = await this.postModel.findById(id).populate('author', AUTHOR_FIELDS);
+    if (!post) throw new NotFoundException('Post not found');
+    return post;
   }
 
-  update(id: number, updatePostDto: UpdatePostDto) {
-    return `This action updates a #${id} post`;
+  async update(id: Types.ObjectId, dto: UpdatePostDto, user: JwtPayload) {
+    const post = await this.findOwnedPost(id, user);
+    Object.assign(post, dto);
+    await post.save();
+    return post.populate('author', AUTHOR_FIELDS);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} post`;
+  async remove(id: Types.ObjectId, user: JwtPayload) {
+    const post = await this.findOwnedPost(id, user);
+    await post.deleteOne();
+    return { deleted: true, id: post._id };
   }
 
-  //   findPublished() {
-  //   return this.postModel
-  //     .find({ published: true })
-  //     .populate('author', 'name email')      // ALWAYS limit fields
-  //     .sort({ createdAt: -1 });
-  // }
+  async addComment(id: Types.ObjectId, dto: AddCommentDto, user: JwtPayload) {
+    const post = await this.postModel.findById(id);
+    if (!post) throw new NotFoundException('Post not found');
 
+    post.comments.push({ text: dto.text, name: user.name });
+    await post.save();
+    return post.populate('author', AUTHOR_FIELDS);
+  }
 
+  /** Only the post's author (or an admin) may change or delete it. */
+  private async findOwnedPost(id: Types.ObjectId, user: JwtPayload) {
+    const post = await this.postModel.findById(id);
+    if (!post) throw new NotFoundException('Post not found');
+
+    const isOwner = post.author.toString() === user.userId;
+    const isAdmin = user.role === UserRole.ADMIN;
+    if (!isOwner && !isAdmin) throw new ForbiddenException('You can only modify your own posts');
+
+    return post;
+  }
 }

@@ -1,8 +1,9 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UserService } from '../user/user.service.js';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/RegisterDto.js';
 import { LoginDto } from './dto/LoginDto.js';
+import { UpdateProfileDto } from '../user/dto/update-profile.dto.js';
 import * as bcrypt from "bcrypt"
 
 export interface JwtPayload {
@@ -19,11 +20,9 @@ export class AuthService {
     ) { }
 
     async register(dto: RegisterDto) {
-        const existing = await this.usersService.findByEmailWithPassword(dto.email);
-        if (existing) throw new ConflictException('Email already registered');
-
+        // create() throws 409 if the email exists, and never returns the password hash
         const user = await this.usersService.create(dto);
-        return { id: user._id, name: user.name, email: user.email, role: user.role };  // never the hash
+        return { id: user._id, name: user.name, email: user.email, role: user.role };
     }
 
     async login(dto: LoginDto) {
@@ -37,6 +36,12 @@ export class AuthService {
         const payload: JwtPayload = { userId: user._id.toString(), role: user.role, name: user.name };  // minimal — no secrets
         return { token: await this.jwtService.signAsync(payload), userData: payload };
     }
+
+    getProfile(userId: string) {
+        return this.usersService.findOne(userId);
+    }
+
+    updateProfile(userId: string, dto: UpdateProfileDto) {
+        return this.usersService.update(userId, dto);
+    }
 }
-
-
