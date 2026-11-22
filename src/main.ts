@@ -20,7 +20,7 @@ async function bootstrap() {
     })
   )
   app.enableCors({
-    origin: 'http://localhost:5173',     // restrict in production!
+    origin: process.env.CLIENT_URL,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
   await app.listen(process.env.PORT ?? 3000);
