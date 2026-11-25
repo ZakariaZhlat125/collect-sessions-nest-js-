@@ -47,6 +47,14 @@ export class UserService implements OnModuleInit {
     return this.userModel.findOne({ email }).select('+password');
   }
 
+  findByIdWithRefreshToken(id: Types.ObjectId | string) {
+    return this.userModel.findById(id).select('+refreshTokenHash');
+  }
+
+  async setRefreshTokenHash(id: Types.ObjectId | string, hash: string | null) {
+    await this.userModel.updateOne({ _id: id }, { refreshTokenHash: hash });
+  }
+
   async findOne(id: Types.ObjectId | string) {
     const user = await this.userModel.findById(id);
     if (!user) throw new NotFoundException('User not found');

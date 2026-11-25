@@ -15,6 +15,10 @@ export class User {
 
     @Prop({ enum: ['user', 'admin'], default: 'user' })
     role: string;
+
+    // SHA-256 of the user's current refresh token (null = logged out). Never returned by default.
+    @Prop({ type: String, select: false, default: null })
+    refreshTokenHash: string | null;
 }
 
 export type UserDocument = HydratedDocument<User>;

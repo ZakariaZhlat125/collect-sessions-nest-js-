@@ -13,7 +13,7 @@ import { UserModule } from '../user/user.module.js';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1d' },
+        signOptions: { expiresIn: '15m' },                   // short-lived access token; use /auth/refresh for a new one
       }),
     }),
   ],

@@ -15,7 +15,7 @@ mongoose.set('sanitizeFilter', true);
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true , validate: validateEnv }),
-    ThrottlerModule.forRoot([{ ttl: 15 * 60_000, limit: 100 }]),
+    ThrottlerModule.forRoot([{ ttl: 1 * 60_000, limit: 100 }]),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
